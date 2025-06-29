@@ -1,0 +1,207 @@
+{
+  "name": "red-light-green-light",
+  "displayName": "Red Light Green Light",
+  "description": "A VSCode extension that implements a typing game where you can only type during green light phases",
+  "version": "0.0.1",
+  "author": "Peter Zhang <peterwengzhang@gmail.com>",
+  "publisher": "redlight-greenlight",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "game",
+    "typing",
+    "productivity",
+    "focus"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "redLightGreenLight.startGame",
+        "title": "Start Red Light Green Light Game",
+        "icon": "$(play)"
+      },
+      {
+        "command": "redLightGreenLight.stopGame",
+        "title": "Stop Red Light Green Light Game",
+        "icon": "$(stop)"
+      },
+      {
+        "command": "redLightGreenLight.toggleGame",
+        "title": "Toggle Red Light Green Light Game"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "redLightGreenLightView",
+          "name": "Red Light Green Light",
+          "when": "true",
+          "icon": "$(play)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "redLightGreenLight.startGame",
+          "when": "view == redLightGreenLightView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "redLightGreenLight.stopGame",
+          "when": "view == redLightGreenLightView",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Red Light Green Light",
+      "properties": {
+        "redLightGreenLight.redLightDuration": {
+          "type": "number",
+          "default": 5,
+          "description": "Duration of red light phase in seconds",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "redLightGreenLight.greenLightDuration": {
+          "type": "number",
+          "default": 10,
+          "description": "Duration of green light phase in seconds",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "redLightGreenLight.gracePeriod": {
+          "type": "number",
+          "default": 0.5,
+          "description": "Grace period in seconds after red light starts where typing is still allowed",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "redLightGreenLight.showTimer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show timer countdown in the game panel and status updates"
+        },
+        "redLightGreenLight.useRandomTiming": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use random timing for red and green light phases"
+        },
+        "redLightGreenLight.randomTiming": {
+          "type": "object",
+          "properties": {
+            "maxTime": {
+              "type": "number",
+              "default": 15,
+              "description": "Maximum random time in seconds",
+              "minimum": 2,
+              "maximum": 120
+            },
+            "minTime": {
+              "type": "number",
+              "default": 3,
+              "description": "Minimum random time in seconds",
+              "minimum": 1,
+              "maximum": 60
+            }
+          },
+          "default": {
+            "maxTime": 15,
+            "minTime": 3
+          },
+          "description": "Random timing configuration (only used when random timing is enabled)"
+        },
+        "redLightGreenLight.redLightAction": {
+          "type": "string",
+          "enum": [
+            "close",
+            "warn"
+          ],
+          "default": "warn",
+          "description": "Action to take when typing during red light",
+          "enumDescriptions": [
+            "Immediately close the IDE",
+            "Show warning message"
+          ]
+        },
+        "redLightGreenLight.enableSounds": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable sound notifications for game events"
+        },
+        "redLightGreenLight.soundSettings": {
+          "type": "object",
+          "properties": {
+            "volume": {
+              "type": "number",
+              "default": 0.5,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Sound volume (0.0 to 1.0)"
+            },
+            "redLightSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Play sound when red light starts"
+            },
+            "greenLightSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Play sound when green light starts"
+            },
+            "violationSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Play sound on red light violation"
+            },
+            "gameStartSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Play sound when game starts"
+            }
+          },
+          "default": {
+            "volume": 0.5,
+            "redLightSound": true,
+            "greenLightSound": true,
+            "violationSound": true,
+            "gameStartSound": true
+          },
+          "description": "Sound configuration settings (only used when sounds are enabled)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.101.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3",
+    "ts-loader": "^9.5.2",
+    "webpack": "^5.99.7",
+    "webpack-cli": "^6.0.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
