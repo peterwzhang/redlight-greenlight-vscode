@@ -4,6 +4,12 @@ All notable changes to the "red-light-green-light" extension will be documented 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
+## 0.0.1
 
-- Initial release
+- Basic red light/green light game mechanics
+- Configurable grace period for reaction time after red light starts
+- Explorer panel integration
+- Configurable timing and actions
+- Sound system with multiple audio events
+- Settings reorganization and improvements
+- Command palette integration
