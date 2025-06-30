@@ -75,8 +75,11 @@ export class SoundManager implements vscode.Disposable {
         }
 
         try {
-            // Initialize play-sound player
-            this.player = playSound();
+            // Initialize play-sound player with platform-optimized settings
+            // play-sound automatically detects the best available audio player
+            // but we can provide platform preferences for better compatibility
+            const playerOptions = this.getOptimalPlayerOptions();
+            this.player = playSound(playerOptions);
             
             // Create promisified version of play function for async/await usage
             this.playAsync = promisify(this.player.play.bind(this.player)) as (filePath: string) => Promise<any>;
@@ -86,12 +89,35 @@ export class SoundManager implements vscode.Disposable {
             
             this.isAudioInitialized = true;
             console.log(`Audio system initialized with play-sound library`);
+            console.log(`Detected audio player: ${this.player.player || 'auto-detected'}`);
             console.log(`Found ${this.availableSoundFiles.size} sound files`);
         } catch (error) {
             console.warn('Failed to initialize audio system:', error);
             this.isAudioInitialized = false;
             this.player = null;
             this.playAsync = null;
+        }
+    }
+
+    /**
+     * Gets optimal player options based on platform for better compatibility
+     * @returns Player options object for play-sound
+     */
+    private getOptimalPlayerOptions(): any {
+        const platform = process.platform;
+        
+        // Return platform-optimized player preferences
+        // play-sound will automatically fall back to other players if preferred ones aren't available
+        switch (platform) {
+            case 'darwin': // macOS
+                return { players: ['afplay', 'mplayer', 'mpg123'] };
+            case 'win32': // Windows
+                return { players: ['powershell', 'mplayer'] };
+            case 'linux': // Linux (including WSL)
+                return { players: ['mpg123', 'mpg321', 'play', 'aplay', 'cvlc', 'mplayer'] };
+            default:
+                // For other platforms, let play-sound auto-detect
+                return {};
         }
     }
 
