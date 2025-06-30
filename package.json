@@ -206,6 +206,6 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "sound-play": "^1.1.0"
+    "play-sound": "^1.1.6"
   }
 }
