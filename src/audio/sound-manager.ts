@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { SoundConfig } from '../types/settings-types';
+
+// Import sound-play library
+const play = require('sound-play');
 
 /**
  * Sound types for different game events
@@ -13,7 +18,18 @@ export enum SoundType {
 }
 
 /**
- * Sound notification mappings for VSCode
+ * Sound file mappings for different game events
+ */
+const SOUND_FILES = {
+    [SoundType.RedLight]: 'red-light.mp3',
+    [SoundType.GreenLight]: 'green-light.mp3',
+    [SoundType.Violation]: 'violation.mp3',
+    [SoundType.GameStart]: 'game-start.mp3',
+    [SoundType.GameStop]: 'game-stop.mp3'
+} as const;
+
+/**
+ * Fallback status messages for when audio fails
  */
 const SOUND_MESSAGES = {
     [SoundType.RedLight]: '🔴 RED LIGHT',
@@ -24,7 +40,7 @@ const SOUND_MESSAGES = {
 } as const;
 
 /**
- * Manages audio feedback for game events using VSCode notifications and system sounds
+ * Manages audio feedback for game events using sound-play library
  */
 export class SoundManager implements vscode.Disposable {
     private isEnabled: boolean = false;
@@ -32,6 +48,9 @@ export class SoundManager implements vscode.Disposable {
     private disposables: vscode.Disposable[] = [];
     private lastSoundTime: Map<SoundType, number> = new Map();
     private readonly soundCooldown: number = 100; // Minimum ms between same sound types
+    private extensionContext: vscode.ExtensionContext | null = null;
+    private isAudioInitialized: boolean = false;
+    private availableSoundFiles: Set<SoundType> = new Set();
 
     /**
      * Creates a new SoundManager instance
@@ -39,6 +58,52 @@ export class SoundManager implements vscode.Disposable {
      */
     constructor(config: SoundConfig) {
         this.config = config;
+    }
+
+    /**
+     * Initializes the audio system with extension context
+     * @param context VSCode extension context
+     */
+    public async initialize(context: vscode.ExtensionContext): Promise<void> {
+        this.extensionContext = context;
+        
+        if (this.isAudioInitialized) {
+            return;
+        }
+
+        try {
+            // Check for available sound files
+            await this.checkSoundFiles();
+            
+            this.isAudioInitialized = true;
+            console.log(`Audio system initialized with sound-play library`);
+            console.log(`Found ${this.availableSoundFiles.size} sound files`);
+        } catch (error) {
+            console.warn('Failed to initialize audio system:', error);
+            this.isAudioInitialized = false;
+        }
+    }
+
+    /**
+     * Checks which sound files are available
+     */
+    private async checkSoundFiles(): Promise<void> {
+        if (!this.extensionContext) {
+            return;
+        }
+
+        const soundsPath = path.join(this.extensionContext.extensionPath, 'assets', 'sounds');
+
+        for (const [soundType, fileName] of Object.entries(SOUND_FILES)) {
+            const filePath = path.join(soundsPath, fileName);
+            
+            if (fs.existsSync(filePath)) {
+                this.availableSoundFiles.add(soundType as SoundType);
+                console.log(`Found sound file: ${fileName}`);
+            } else {
+                console.warn(`Sound file not found: ${filePath}`);
+            }
+        }
     }
 
     /**
@@ -75,10 +140,52 @@ export class SoundManager implements vscode.Disposable {
         this.lastSoundTime.set(soundType, now);
 
         try {
-            await this.playSystemSound(soundType);
+            if (this.isAudioInitialized && this.availableSoundFiles.has(soundType)) {
+                await this.playAudioFile(soundType);
+            } else {
+                // Fallback to visual feedback
+                await this.showVisualFeedback(soundType);
+            }
         } catch (error) {
             console.warn(`Failed to play sound for ${soundType}:`, error);
+            // Fallback to visual feedback
+            await this.showVisualFeedback(soundType);
         }
+    }
+
+    /**
+     * Plays an audio file using sound-play library
+     * @param soundType Type of sound to play
+     */
+    private async playAudioFile(soundType: SoundType): Promise<void> {
+        if (!this.extensionContext || !this.availableSoundFiles.has(soundType)) {
+            return;
+        }
+
+        const fileName = SOUND_FILES[soundType];
+        const filePath = path.join(this.extensionContext.extensionPath, 'assets', 'sounds', fileName);
+
+        try {
+            // Play sound using sound-play library
+            // Note: sound-play automatically handles volume based on system settings
+            await play.play(filePath);
+            console.log(`Playing audio file: ${fileName}`);
+        } catch (error) {
+            console.warn(`Failed to play ${fileName} with sound-play:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Shows visual feedback when audio is not available
+     * @param soundType Type of sound
+     */
+    private async showVisualFeedback(soundType: SoundType): Promise<void> {
+        const message = SOUND_MESSAGES[soundType];
+        const duration = this.getSoundDuration(soundType);
+
+        // Show brief status bar message as fallback
+        vscode.window.setStatusBarMessage(message, duration);
     }
 
     /**
@@ -86,23 +193,51 @@ export class SoundManager implements vscode.Disposable {
      */
     public async testAudio(): Promise<boolean> {
         try {
-            await vscode.window.showInformationMessage('🔊 Audio test - you should hear system notification sounds when enabled');
-            return true;
+            if (this.isAudioInitialized) {
+                await this.playSound(SoundType.GameStart);
+                vscode.window.showInformationMessage('🔊 Audio test - you should hear the game start sound');
+                return true;
+            } else {
+                vscode.window.showWarningMessage('🔇 Audio system not initialized. Check that MP3 files are present in assets/sounds/');
+                return false;
+            }
         } catch (error) {
             console.warn('Audio test failed:', error);
+            vscode.window.showErrorMessage('Audio test failed - see console for details');
             return false;
         }
     }
 
     /**
-     * Gets the current volume level (simulated - actual volume depends on system)
+     * Checks if audio is supported and initialized
+     */
+    public isAudioSupported(): boolean {
+        return this.isAudioInitialized;
+    }
+
+    /**
+     * Gets the list of loaded audio files
+     */
+    public getLoadedSounds(): SoundType[] {
+        return Array.from(this.availableSoundFiles);
+    }
+
+    /**
+     * Gets the total number of expected sound files
+     */
+    public getExpectedSoundCount(): number {
+        return Object.keys(SOUND_FILES).length;
+    }
+
+    /**
+     * Gets the current volume level
      */
     public getVolume(): number {
         return this.config.volume;
     }
 
     /**
-     * Sets the volume level (stored for UI purposes, actual volume is system-controlled)
+     * Sets the volume level
      * @param volume Volume level (0.0 to 1.0)
      */
     public setVolume(volume: number): void {
@@ -110,33 +245,6 @@ export class SoundManager implements vscode.Disposable {
             ...this.config,
             volume: Math.max(0, Math.min(1, volume))
         };
-    }
-
-    /**
-     * Checks if audio is supported (always true for notification-based sounds)
-     */
-    public isAudioSupported(): boolean {
-        return true;
-    }
-
-    /**
-     * Plays sound notification with brief visual feedback
-     * @param soundType Type of sound to play
-     */
-    public async playSoundWithVisualFeedback(soundType: SoundType): Promise<void> {
-        if (!this.isEnabled || !this.shouldPlaySound(soundType)) {
-            return;
-        }
-
-        const message = SOUND_MESSAGES[soundType];
-        const duration = this.getSoundDuration(soundType);
-
-        // Show brief status bar message as visual feedback
-        const statusDisposable = vscode.window.setStatusBarMessage(message, duration);
-        this.disposables.push(statusDisposable);
-
-        // Play the system sound
-        await this.playSystemSound(soundType);
     }
 
     /**
@@ -158,37 +266,6 @@ export class SoundManager implements vscode.Disposable {
             default:
                 return false;
         }
-    }
-
-    /**
-     * Plays system sound using VSCode notifications
-     * @param soundType Type of sound to play
-     */
-    private async playSystemSound(soundType: SoundType): Promise<void> {
-        const message = SOUND_MESSAGES[soundType];
-        
-        // Use different notification types to potentially trigger different system sounds
-        switch (soundType) {
-            case SoundType.RedLight:
-            case SoundType.Violation:
-                // Use warning for red/error sounds (may trigger system warning sound)
-                await vscode.window.showWarningMessage(message, { modal: false });
-                break;
-            case SoundType.GreenLight:
-            case SoundType.GameStart:
-                // Use info for positive sounds (may trigger system info sound)
-                await vscode.window.showInformationMessage(message, { modal: false });
-                break;
-            case SoundType.GameStop:
-                // Use info for neutral sounds
-                await vscode.window.showInformationMessage(message, { modal: false });
-                break;
-        }
-
-        // Automatically dismiss the notification after a short time
-        setTimeout(() => {
-            vscode.commands.executeCommand('notifications.clearAll');
-        }, this.getSoundDuration(soundType));
     }
 
     /**
@@ -214,7 +291,7 @@ export class SoundManager implements vscode.Disposable {
     }
 
     /**
-     * Creates a subtle sound effect using status bar messages
+     * Creates a subtle sound effect (plays at lower volume)
      * @param soundType Type of sound
      */
     public async playSubtleSound(soundType: SoundType): Promise<void> {
@@ -222,26 +299,41 @@ export class SoundManager implements vscode.Disposable {
             return;
         }
 
-        const message = SOUND_MESSAGES[soundType];
-        const duration = this.getSoundDuration(soundType) / 2; // Shorter for subtle effect
-
-        // Just show status bar message without notification popup
-        vscode.window.setStatusBarMessage(message, duration);
+        // For subtle sounds, just show visual feedback for now
+        // sound-play doesn't have easy volume control
+        await this.showVisualFeedback(soundType);
     }
 
     /**
      * Shows configuration help for sound settings
      */
     public async showSoundHelp(): Promise<void> {
+        const loadedCount = this.availableSoundFiles.size;
+        const expectedCount = this.getExpectedSoundCount();
+        
         const helpMessage = 
-            'Sound notifications in VSCode extensions use system notification sounds.\n\n' +
-            'To enhance audio feedback:\n' +
-            '• Enable system notification sounds in your OS settings\n' +
-            '• Adjust system volume for notifications\n' +
-            '• Different notification types may use different system sounds\n\n' +
-            'The extension will show brief visual feedback for all sound events.';
+            `Red Light Green Light Audio System\n\n` +
+            `Status: ${this.isAudioInitialized ? '✅ Initialized' : '❌ Not Initialized'}\n` +
+            `Audio Library: sound-play (Node.js)\n` +
+            `Loaded Sounds: ${loadedCount}/${expectedCount}\n\n` +
+            `Sound files should be placed in:\n` +
+            `📁 assets/sounds/\n` +
+            `├── red-light.mp3\n` +
+            `├── green-light.mp3\n` +
+            `├── violation.mp3\n` +
+            `├── game-start.mp3\n` +
+            `└── game-stop.mp3\n\n` +
+            `If sounds aren't playing:\n` +
+            `• Check that all MP3 files are present\n` +
+            `• Ensure system audio is working\n` +
+            `• Try the audio test in settings\n` +
+            `• Check system audio volume`;
 
-        await vscode.window.showInformationMessage(helpMessage, 'Got it');
+        await vscode.window.showInformationMessage(helpMessage, 'Got it', 'Test Audio').then(async (choice) => {
+            if (choice === 'Test Audio') {
+                await this.testAudio();
+            }
+        });
     }
 
     /**
@@ -250,6 +342,8 @@ export class SoundManager implements vscode.Disposable {
     public dispose(): void {
         this.isEnabled = false;
         this.lastSoundTime.clear();
+        this.availableSoundFiles.clear();
+        this.isAudioInitialized = false;
         
         this.disposables.forEach(disposable => disposable.dispose());
         this.disposables.length = 0;

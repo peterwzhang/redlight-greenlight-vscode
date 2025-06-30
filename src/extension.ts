@@ -40,6 +40,9 @@ class RedLightGreenLightExtension {
             const soundConfig = this.settingsManager.getSettings().soundSettings;
             this.soundManager = new SoundManager(soundConfig);
             this.soundManager.setEnabled(this.settingsManager.getSettings().enableSounds);
+            
+            // Initialize audio system with extension context
+            await this.soundManager.initialize(context);
 
             // Initialize input monitoring
             this.inputMonitor = new InputMonitor(this.gameEngine);
