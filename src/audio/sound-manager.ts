@@ -114,7 +114,11 @@ export class SoundManager implements vscode.Disposable {
             case 'win32': // Windows
                 return { players: ['powershell', 'mplayer'] };
             case 'linux': // Linux (including WSL)
-                return { players: ['mpg123', 'mpg321', 'play', 'aplay', 'cvlc', 'mplayer', 'ffplay'] };
+                return { 
+                    players: ['mpg123', 'mpg321', 'play', 'aplay', 'cvlc', 'mplayer', 'ffplay'],
+                    // Configure ffplay to run without displaying video window
+                    ffplay: ['-nodisp', '-autoexit']
+                };
             default:
                 // For other platforms, let play-sound auto-detect
                 return {};
