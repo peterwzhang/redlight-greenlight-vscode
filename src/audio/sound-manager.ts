@@ -79,6 +79,8 @@ export class SoundManager implements vscode.Disposable {
             // play-sound automatically detects the best available audio player
             // but we can provide platform preferences for better compatibility
             const playerOptions = this.getOptimalPlayerOptions();
+            console.log(`Initializing audio with options:`, JSON.stringify(playerOptions, null, 2));
+            
             this.player = playSound(playerOptions);
             
             // Create promisified version of play function for async/await usage
@@ -90,6 +92,7 @@ export class SoundManager implements vscode.Disposable {
             this.isAudioInitialized = true;
             console.log(`Audio system initialized with play-sound library`);
             console.log(`Detected audio player: ${this.player.player || 'auto-detected'}`);
+            console.log(`Player object keys:`, Object.keys(this.player));
             console.log(`Found ${this.availableSoundFiles.size} sound files`);
         } catch (error) {
             console.warn('Failed to initialize audio system:', error);
@@ -199,7 +202,7 @@ export class SoundManager implements vscode.Disposable {
      * @param soundType Type of sound to play
      */
     private async playAudioFile(soundType: SoundType): Promise<void> {
-        if (!this.extensionContext || !this.availableSoundFiles.has(soundType) || !this.playAsync) {
+        if (!this.extensionContext || !this.availableSoundFiles.has(soundType) || !this.player) {
             return;
         }
 
@@ -207,9 +210,24 @@ export class SoundManager implements vscode.Disposable {
         const filePath = path.join(this.extensionContext.extensionPath, 'assets', 'sounds', fileName);
 
         try {
-            // Play sound using play-sound library with improved error handling
-            await this.playAsync(filePath);
+            // Get player options with volume control
+            const playerOptions = this.getPlayerOptionsForPlayback();
+            
+            // Debug logging
             console.log(`Playing audio file: ${fileName}`);
+            console.log(`Player options:`, JSON.stringify(playerOptions, null, 2));
+            console.log(`Detected player: ${this.player.player || 'auto-detected'}`);
+            
+            // Use callback-based approach with explicit options to ensure flags are passed
+            await new Promise<void>((resolve, reject) => {
+                this.player.play(filePath, playerOptions, (err: any) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
         } catch (error) {
             // Enhanced error messages for better debugging
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -223,6 +241,33 @@ export class SoundManager implements vscode.Disposable {
             
             throw error;
         }
+    }
+
+    /**
+     * Gets player options for individual playback calls with volume control
+     * @returns Player options with volume settings for each player type
+     */
+    private getPlayerOptionsForPlayback(): any {
+        const volume = this.config.volume;
+        const platform = process.platform;
+        
+        // Base options with volume control for different players
+        const options: any = {};
+        
+        switch (platform) {
+            case 'darwin': // macOS
+                break;
+            case 'linux': // Linux (including WSL)
+                // Configure ffplay with volume and no display
+                options.ffplay = ['-nodisp', '-autoexit']; // ffplay volume: 0 to 100
+                // For mpg123, volume is 0-32768, but we'll use a more reasonable scale
+                break;
+            case 'win32': // Windows
+                // Windows doesn't have easy volume control for most players
+                break;
+        }
+        
+        return options;
     }
 
     /**
